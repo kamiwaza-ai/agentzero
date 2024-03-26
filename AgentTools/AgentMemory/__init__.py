@@ -1,0 +1,2 @@
+from .MemoryInterface import AssistantMemory
+from .WeaviateImplementation import WeaviateImplementation

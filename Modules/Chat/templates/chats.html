@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Sessions</title>
+</head>
+<body>
+    <h1>Chat Sessions</h1>
+    <ul id="chatSessions">
+        {% for chat_guid, chat_title in chat_sessions %}
+            <li>
+                <a class="chat-link" id="chatlink_{{chat_guid}}" href="{{ url_for('chat', chat_id=chat_guid) }}">{{ chat_title }}</a>
+                <span class="edit-icon" data-chatid="{{chat_guid}}" style="cursor: pointer;">✏️</span>
+            </li>
+        {% endfor %}
+    </ul>
+    <a href="{{ url_for('chat') }}">Start a new chat</a>
+</body>
+</html>

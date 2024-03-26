@@ -1,0 +1,80 @@
+# === Python === #
+*.pyc
+*.pyo
+*.egg
+*.egg-info/
+__pycache__/
+docs/
+
+# === dev jupyter == #
+/dev-notebooks/
+
+# === Virtual Environments === #
+venv/
+*.venv
+*.virtenv
+
+# === IDEs === #
+.idea/
+.vscode/
+
+# === Logs and Databases === #
+*.log
+*.sqlite3
+*.db
+logs/*
+
+# === OS Generated Files === #
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Windows folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# === Other === #
+# Directories used by the OS for its own use
+.Trashes
+*.bak
+
+# == External Stuff we don't want in our git (at least yet) ==
+ext/
+
+deployment/vectordb-milvus/osx/volumes
+
+# == Jupyter things
+.ipynb_checkpoints
+
+# Dependency directories
+node_modules/
+
+# Production build folder
+build/
+
+# Environment variables
+.env
+
+# Misc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+frontend/package-lock.json
+
+# app specific
+userdata/
+titles.cache
+req.txt
+gsearch.json
+lc.py
+
+*.whl

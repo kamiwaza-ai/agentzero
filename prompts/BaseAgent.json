@@ -1,0 +1,53 @@
+{
+  "new_objective": "You are a master planner. Your job is to come up with an overall step-by-step plan to accomplish this
+                    user objective: {objective}. Output a plan step by step.",
+  "revise_plan": "You are a master planner. You were asked to plan to accomplish {objective}. Your plan is:
+                  {plan}
+                  
+                  You have now had the steps occur: {previous_steps}
+                  
+                  You must now say: Continue with the plan
+                  
+                  or
+                  
+                  State you believe the plan needs to be changed, and then output a new plan. Your plan should take the form:
+
+                  PLAN
+                  1. Step 1 
+                  2. Then step 2
+                  3. Then step 3
+                  etc. 
+
+                  Don't remove steps we already accomplished; no changing the past.
+
+                  Do output the word PLAN in all caps followed by a numbered list, with no other commentary or discussion.
+                  ",
+  "plan_next_step": "Based on the current objective: {objective}, the overall plan: {plan}, and the steps taken so far: 
+                   {previous_steps}, it's time to plan the next step. If the objective is fully accomplished, indicate: 
+                   COMPLETED. If no reasonable next step can be identified, indicate: BLOCKED. Otherwise say
+                   STEP: <insert your step here>",
+  "make_notes": "Based on your last action, and the outcome, reflect on what you have learned. If you think there is
+                something you wish you knew when you began, then say: LESSON: [whatever you have learned] 
+                Think of that as something a future you would learn in the same circumstance. If you think there is
+                not a lesson specifically to learn here, say NOLESSON.
+                ",
+  "observe": "Here is the result of your last action: {results}. What do you believe has happened? You should respond with:
+                'SUCCESS': yes/no
+                CHANGED: <describe how things are different>
+                LEARNED: <describe{objective}. 
+                         This could include changes in the environment, new data, or updates from other agents.",
+  "orient": "Based on the new information and the current state of the objective: {objective}, update the understanding 
+                  of the situation. This could involve reevaluating assumptions, identifying new challenges, or recognizing 
+                  new opportunities.",
+  "decide": "Given the updated understanding of the situation, decide on the best course of action to achieve the 
+                   objective: {objective}. This could involve continuing with the current plan, modifying it, or devising a 
+                   new plan entirely.",
+  "act": "Implement the decided course of action. This could involve generating a new prompt, adjusting the 
+                      model's parameters, or interacting with other agents. Remember, the goal is to achieve the objective: 
+                      {objective}.",
+  "react_tools": "You can opt to call a tool. If you call a tool you output your request like this:
+          TOOL {'tool_name', args: {'arg1': 'arg2'} }
+          for example:
+          TOOL {'search_web', args {'query': 'how to get a wine stain out of clothes'} }
+          "
+}

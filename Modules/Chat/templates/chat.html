@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrivateGPT</title>
+    <link rel="stylesheet" href="/chat/static/monokai-sublime.min.css">
+    <script src="/chat/static/highlight.min.js"></script>
+    <script>
+        let assistantName = "Assistant";
+    </script>
+    <!-- Ensure socket.io is defined before its usage -->
+    <style>
+        /* Dark mode */
+        h1 {
+            margin: 5px;
+        }
+        body {
+            background-color: #222;
+            color: #ddd;
+            display: flex;
+            justify-content: center;
+        }
+
+        #input_area {
+            display: flex;
+            margin-bottom: 0; /* Remove margin-bottom */
+        }
+
+        .inline-code {
+            background-color: #444;
+            color: #ddd;
+            border-radius: 3px;
+            padding: 2px 4px;
+            font-family: monospace;
+        }
+        
+        .code-header {
+            background-color: #555;
+            color: #ddd;
+            padding: 2px 4px;
+            border-radius: 3px 3px 0 0;
+            font-family: monospace;
+            font-weight: bold;
+            margin-bottom: 0px;
+            margin-top:10px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.2); /* Light grey */
+            border-top: 4px solid #4a9; /* Blue */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .code-wrapper {
+            margin-top: 0; /* Add this line */
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            background-color: transparent;
+            border: none.
+        }
+        
+        .copy-code {
+            float: right;
+            cursor: pointer;
+            text-decoration: underline;
+            color: #4a9;
+            font-weight: normal.
+        }
+
+        /* Light grey textarea */
+        .light-grey-textarea {
+            background-color: #444;
+            color: #ddd;
+            border: 1px solid #333;
+        }
+        a {
+            color: #4a9;
+        }
+        /* Alternating colors and padding for messages */
+        #chat_history > div:nth-child(odd) {
+            background-color: #333;
+            padding: 5px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+        #chat_history > div:nth-child(even) {
+            background-color: #444;
+            padding: 5px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+        pre {
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            background-color: transparent;
+            border: none;
+        }
+        /* Two-column layout */
+        #left-panel {
+            flex: 0 0 20%;
+            border-right: 1px solid #333;
+            min-width: 100px;
+            padding: 10px;
+            height: 100vh;
+            overflow-y: scroll;
+        }
+        #main-content {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 50px);
+            text-align: left; /* Left-justify chat content */
+        }
+        #chat_history {
+            border: 1px solid #333;
+            background-color: #111;
+            flex-grow: 1;
+            margin-bottom: 5px;
+            text-align: left; /* Left-justify chat content */
+        }
+        /* New styles for roles and messages */
+        .message-container {
+            display: flex;
+            align-items: flex-start;
+        }
+        .role-label {
+            background-color: #666;
+            padding-right: 5px;
+            min-width: 60px;
+            text-align: right;
+            margin-top: 1px;
+            padding: 5px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+        .message {
+            flex-grow: 1;
+            font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif,Helvetica Neue,Arial,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;
+            background-color: #333;
+            padding: 5px;
+            font-size: 1rem;
+            line-height: 1.5rem;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+        .message-error {
+            flex-grow: 1;
+            font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif,Helvetica Neue,Arial,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;
+            background-color: #a94442; /* Bootstrap's `$brand-danger` for error messages */
+            color: #fff; /* Ensuring text is readable on the error background */
+            padding: 5px;
+            font-size: 1rem;
+            line-height: 1.5rem;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+        #chat_history > .message-container:nth-child(even) .message {
+            background-color: #444;
+        }
+    </style>
+</head>
+<body>
+    <div id="left-panel">
+        <!-- Left panel content will be loaded here -->
+    </div>
+    <div id="main-content" style="width: 50%; margin: auto; text-align: center;">
+        <h1>PrivateGPT</h1>
+        <div id="sid_display"></div>
+        <div id="warning_display"></div>
+        <div id="chat_history" style="border: 1px solid black; padding: 10px; height: 300px; overflow-y: scroll;">
+        </div>
+        <form id="chat_form">
+            <input type="hidden" name="chatId" value="{{ chat_id }}">
+            <div id="model_selector_container" style="margin-bottom: 20px;">
+                <label for="model_selector">Choose a model:</label>
+                <select id="model_selector" name="model_selector">
+                    <!-- Options will be populated here -->
+                </select>
+                <input type="hidden" id="listen_port" name="listen_port" value=""><input type="hidden" id="host_name" name="host_name" value="">
+                <input type="hidden" id="currently_selected_model" name="currently_selected_model" value="{{ selected_model }}">
+                <button id="refresh_models" type="button">Refresh Models</button>
+            </div>
+            <label for="user_input">Your message:</label><br>
+            <textarea name="user_input" id="user_input" rows="4" cols="50" class="light-grey-textarea"></textarea><br>
+            <input id="chat_submit_btn" type="submit" value="Send">
+        </form>
+    </div>
+    <script>
+        const chatForm = document.getElementById("chat_form");
+        const chatHistory = document.getElementById("chat_history");
+        const wsBaseUrl = window.location.protocol.replace("http", "ws") + "//" + window.location.host;
+        const userId = "{{ user_id }}" || null;
+        const chatId = "{{ chat_id }}" || null;
+        let wsUrlComponents = [wsBaseUrl, "ws"];
+        if (userId) wsUrlComponents.push(userId);
+        if (chatId) wsUrlComponents.push(chatId);
+        wsUrl = wsUrlComponents.join("/") + "/";
+        let socket;
+        let models = [];
+        let modelSelector; // Declare modelSelector at the top level for wider scope access
+        let modelPort;
+        let modelHost;
+        let refreshModelsButton;
+        let currentEditingInput = null;
+
+        chatHistory.addEventListener("click", (event) => {
+            const copyCodeLink = event.target.closest(".copy-code");
+        
+            if (copyCodeLink) {
+                event.stopPropagation();
+                event.preventDefault();
+                const code = copyCodeLink.dataset.code;
+                copyToClipboard(code);
+                copyCodeLink.innerText = "✓ Copied!";
+                setTimeout(() => {
+                    copyCodeLink.innerText = "Copy code";
+                }, 4000);
+            }
+        });
+
+
+
+        const userInput = document.getElementById("user_input");
+        const chatIdInput = document.querySelector("input[name='chatId']");
+
+        function updateWebSocketUrl() {
+            console.log("attempting to update wsurl")
+            const selectedModelId = modelSelector.value;
+            console.log(`wsBaseUrl: ${wsBaseUrl}, userId: ${userId}, chatId: ${chatId}, selectedModelId: ${selectedModelId}`);
+            const selectedModelData = models.find(model => model.model_id === selectedModelId);
+            if (selectedModelData) {
+                console.log(`Selected Model - host_name: ${selectedModelData.host_name}, listen_port: ${selectedModelData.listen_port}, model_name: ${selectedModelData.model_name}`);
+                // Reconstruct the WebSocket URL with the new model details
+                if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+                    socket.close();
+                }
+
+                wsUrl = `${wsBaseUrl}/ws/${userId}/${chatId}/${selectedModelData.host_name}/${selectedModelData.listen_port}/${selectedModelData.model_name}/`;
+                socket = new WebSocket(wsUrl); // Reinitialize the WebSocket connection with the new URL
+                console.log("WebSocket URL updated:", wsUrl);
+            } else {
+                return;
+            }
+
+            // Event listener for when the connection is open
+            socket.onopen = function(event) {
+                console.log("WebSocket is open now.");
+            };
+
+            // Event listener for when a message is received from the server
+            socket.onmessage = function(event) {
+                console.log("Message from server ", event.data);
+
+                const data = JSON.parse(event.data);
+                console.log("event is of type " + typeof(event) + " and event.data is of type " + typeof(event.data) + " and data is of type " + typeof(data));
+
+                if (!chatIdInput.value && data.chat_id) {
+                    chatIdInput.value = data.chat_id;
+                }
+                // Handling different message types
+                if (data.chat_id == chatIdInput.value && data.type === "response_chunk") {
+                    lastAssistantMessageElement = appendMessage(data.response_chunk.choices[0].delta.content, assistantName, lastAssistantMessageElement, true);
+                } else if (data.chat_id == chatIdInput.value && data.type === "response") {
+                    submitButton = document.getElementById("chat_submit_btn");
+                    //spinner = document.querySelector('.spinner');
+                    //spinner.remove(); // Remove the spinner after processing
+                    console.log("enable send (processing done)");
+                    submitButton.disabled = false; // Re-enable the submit button
+                    submitButton.value = 'Send'; // Reset button text to original
+                    lastAssistantMessageElement = appendMessage(data.last_response, assistantName, lastAssistantMessageElement);
+                    chatIdInput.value = data.chat_id;
+                    document.getElementById("sid_display").innerHTML = "Session ID: " + data.chat_id;
+                    // Ensure chatTitle is defined before calling notifyChatCreated
+                    if (data.chat_title) {
+                        notifyChatCreated(data.chat_id, data.chat_title);
+                    }
+                } else {
+                    console.log("Error: could not match chatId " + (data.chat_id) + " or data.type was invalid " + data.type + " -- ignoring message " + JSON.stringify(data))
+                }
+            };
+
+            // Event listener for when the connection is closed
+            socket.onclose = function(event) {
+                console.log("WebSocket is closed now.");
+            };
+
+            // Event listener for any errors
+            socket.onerror = function(error) {
+                console.log("WebSocket error: ", error);
+            };
+        }
+
+        function notifyChatCreated(chatId, chatTitle) {
+            const newChatEvent = new CustomEvent('newChatCreated', {
+                detail: { chatId, chatTitle }
+            });
+            document.getElementById('left-panel').dispatchEvent(newChatEvent);
+        }
+
+        function addNewChat(chatId, chatTitle) {
+            // Check if chatId is already in chatSessions and return if so
+            const existingChat = document.querySelector(`#chatlink_${chatId}`);
+            if (existingChat) {
+                return;
+            }
+            const list = document.getElementById('chatSessions');
+            const listItem = document.createElement('li');
+            
+            // Correctly set the innerHTML to include both the link and the edit icon
+            listItem.innerHTML = `<a id="chatlink_${chatId}" href="/chat/${chatId}" class="editable-title"></a> <span class="edit-icon" style="cursor: pointer;">✏️</span>`;
+            list.prepend(listItem);
+        
+            const link = listItem.querySelector('a');
+            // Restore the typing animation for the chat title
+            let index = 0;
+            function typeTitle() {
+                if (index < chatTitle.length) {
+                    link.textContent += chatTitle[index];
+                    index++;
+                    setTimeout(typeTitle, 75); // Type out one character every 75ms
+                }
+            }
+            typeTitle();
+        }
+        
+
+        async function loadLeftPanel() {
+            const response = await fetch('/chats');
+            const leftPanelContent = await response.text();
+            document.getElementById('left-panel').innerHTML = leftPanelContent;
+        
+            // Setup event listeners for edit icons
+            setupChatSessionListener(); // Call this to reinitialize listeners for dynamically loaded content
+        }
+        
+        
+        
+        function setupChatSessionListener() {
+            const chatSessions = document.getElementById('chatSessions');
+            chatSessions.addEventListener('click', function(event) {
+                if (event.target.classList.contains('edit-icon')) {
+                    // Extract chatId from the data attribute
+                    const chatId = event.target.getAttribute('data-chatid');
+                    // Find the chat title based on chatId
+                    const chatTitleElement = document.querySelector(`a#chatlink_${chatId}`);
+                    const chatTitle = chatTitleElement.innerText;
+                    // Start the editing process
+                    editTitle(chatId, chatTitle);
+                }
+            });
+
+            // Listen for the custom 'newChatCreated' event to add a new chat
+            document.getElementById('left-panel').addEventListener('newChatCreated', (event) => {
+                const { chatId, chatTitle } = event.detail;
+                addNewChat(chatId, chatTitle);
+            });
+        }
+        
+        
+        function chatSessionClickHandler(event) {
+            const target = event.target;
+            if (target.tagName === 'SPAN' && target.classList.contains('edit-icon')) {
+                const chatId = target.previousElementSibling.id;
+                const chatTitle = target.previousElementSibling.textContent;
+                editTitle(chatId, chatTitle);
+            }
+        }
+        
+
+        function editTitle(chatId, chatTitle) {
+            if (currentEditingInput) {
+                revertTitle(currentEditingInput, currentEditingInput.dataset.originalTitle, currentEditingInput.dataset.chatId);
+            }
+        
+            const link = document.getElementById(`chatlink_${chatId}`);
+            link.style.display = 'none';
+        
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = chatTitle;
+            input.dataset.originalTitle = chatTitle;
+            input.dataset.chatId = chatId;
+        
+            link.parentNode.insertBefore(input, link.nextSibling);
+            input.focus();
+            currentEditingInput = input;
+        
+            let isEditingComplete = false; // Flag to control the blur action
+        
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                    e.preventDefault(); // Prevent default to stop any form submission or other unwanted behavior
+                    isEditingComplete = true; // Indicate that editing is being committed or cancelled
+                    
+                    // Perform the update or revert as necessary
+                    if (e.key === 'Enter') {
+                        updateTitle(input, chatTitle, chatId);
+                    } else {
+                        revertTitle(input, chatTitle, chatId);
+                    }
+                    
+                    // Delay clearing the flag to ensure it's still set if a blur event is fired immediately after
+                    setTimeout(() => { isEditingComplete = false; }, 100);
+                }
+            });
+        
+            input.addEventListener('blur', function() {
+                if (!isEditingComplete) {
+                    console.log("FIRING BLUR HANDLER");
+                    revertTitle(input, chatTitle, chatId);
+                }
+            });
+        }
+        
+
+
+        function updateTitle(input, originalTitle, chatId) {
+            const newTitle = input.value;
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `/chat/${chatId}/title`, true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    // On successful update, revert the edit UI and update the title
+                    revertTitle(input, newTitle, chatId, true);
+                    typeOutTitle(newTitle, chatId); // Optionally update the display with a typing effect
+                } else if (xhr.readyState === 4) {
+                    alert('Failed to Update Title');
+                    revertTitle(input, originalTitle, chatId);
+                }
+            };
+            xhr.send(JSON.stringify({title: newTitle}));
+        }
+
+        function revertTitle(input, title, chatId, update = false) {
+            const link = document.getElementById(`chatlink_${chatId}`);
+            if (!link) {return;}
+            if (!input) {return;}
+            if (!input.parentNode) {return;}
+            if (input.parentNode && input.parentNode.contains(input)) {
+                input.parentNode.removeChild(input);
+            }
+            if (update) {
+                link.textContent = title;
+            }
+            link.style.display = ''; // Show the link again
+            currentEditingInput = null;
+        }
+        
+        
+
+        function typeOutTitle(title, chatId) {
+            const link = document.getElementById(`chatlink_${chatId}`);
+            link.textContent = ''; // Clear the text content before typing out
+            let index = 0;
+            function typeChar() {
+                if (index < title.length) {
+                    link.textContent += title.charAt(index);
+                    index++;
+                    setTimeout(typeChar, 75); // Type out one character every 75ms
+                }
+            }
+            typeChar();
+        }
+
+
+        loadLeftPanel();
+
+
+        chatHistoryData = [];
+        document.addEventListener("DOMContentLoaded", () => {
+            chatHistoryData = {{ chat_history|tojson }};
+            chatHistoryData.forEach(chat => {
+                appendMessage(chat["content"], chat["role"]);
+            });
+        });
+        document.addEventListener("DOMContentLoaded", async () => {
+            modelSelector = document.getElementById('model_selector');
+            defaultModelId = document.getElementById('currently_selected_model').value
+            modelPort = document.getElementById('listen_port');
+            modelHost = document.getElementById('host_name');
+            refreshModelsButton = document.getElementById('refresh_models');
+            isFirstModelSelectorLoad = true;
+
+            async function fetchModels() {
+                try {
+                    const response = await fetch('/models');
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch models');
+                    }
+                    const modelsData = await response.json();
+                    models = modelsData.models; // Update the models array with fetched data
+                    return models;
+                } catch (error) {
+                    console.error('Error fetching models:', error);
+                    return [];
+                }
+            }
+
+            function populateModelSelector(models, selectedModelId = '') {
+                modelSelector.innerHTML = ''; // Clear existing options
+                let isDefaultSelected = false; // Flag to check if default model is selected
+                let modelIdToSelect = selectedModelId || defaultModelId; // Use selectedModelId if available, otherwise use defaultModelId
+
+                // Determine if a default model should be selected based on selectedModelId or defaultModelId
+                let shouldSelectDefaultModel = false;
+                if (modelIdToSelect) {
+                    const defaultModel = models.find(model => model.model_name === modelIdToSelect);
+                    modelIdToSelect = defaultModel ? defaultModel.model_id : null;
+                    shouldSelectDefaultModel = !!defaultModel;
+                    if (!shouldSelectDefaultModel && defaultModelId) {
+                        document.getElementById('warning_display').innerText = 'Your previous model ('+defaultModelId+') ' + 
+                            'is no longer deployed; please select a new model';
+                    }
+                }
+
+                // If no modelIdToSelect is determined, select the first model by default
+                if (!modelIdToSelect && models.length > 0) {
+                    modelIdToSelect = models[0].model_id;
+                    isDefaultSelected = true; // Mark that a default model has been selected
+                }
+
+                models.forEach((model, index) => {
+                    const option = document.createElement('option');
+                    option.value = model.model_id; // Use model_id as the value for each option
+                    option.textContent = model.model_name; // Display the model name to the user
+                    // Automatically select the model based on logic above
+                    if (model.model_id === modelIdToSelect) {
+                        option.selected = true;
+                        isDefaultSelected = true; // Mark that a default model has been selected
+                    }
+                    modelSelector.appendChild(option);
+                });
+
+                // Trigger "You Must Select a New Model" if no model was selected or defaultModelId is set but not found
+                if ((!isDefaultSelected && modelIdToSelect) || (!shouldSelectDefaultModel && defaultModelId)) {
+                    const unselectedOption = document.createElement('option');
+                    unselectedOption.value = 'unselected';
+                    unselectedOption.textContent = 'You Must Select a New Model';
+                    modelSelector.appendChild(unselectedOption);
+                    modelSelector.value = 'unselected';
+                } else if (isDefaultSelected) {
+                    // Explicitly set the modelSelector value to ensure it's not undefined
+                    modelSelector.value = modelIdToSelect;
+                    updateModelDetails(modelIdToSelect); // Ensure model details are updated based on the selected model
+                }
+
+                isFirstModelSelectorLoad = false; // Mark that the initial load logic has completed
+            }
+
+            async function refreshModels() {
+                await fetchModels().then(() => {
+                    const selectedModelId = modelSelector.value;
+                    populateModelSelector(models, selectedModelId);
+                    if (socket) {
+                        updateWebSocketUrl(); // Update the WebSocket URL with the new model details
+                    }
+                });
+            }
+
+            function updateModelDetails(selectedModelId) {
+                const selectedModelData = models.find(model => model.model_id === selectedModelId);
+                console.log("updateModelDetails with " + selectedModelData.host_name + " " + selectedModelData.listen_port)
+                if (selectedModelData) {
+                    modelPort.value = selectedModelData.listen_port; // Update the hidden modelPort field
+                    modelHost.value = selectedModelData.host_name; // Update the hidden modelHost field
+                    updateWebSocketUrl(); // Update the WebSocket URL with the new model details
+                }
+            }
+
+            // Event listener for model selection change
+            modelSelector.addEventListener('change', () => {
+                const selectedModelId = modelSelector.value;
+                console.log("modelSelector change event with " + selectedModelId)
+                updateModelDetails(selectedModelId);
+            });
+
+
+            // Event listener for refresh models button
+            refreshModelsButton.addEventListener('click', refreshModels);
+
+            // Initial population of model selector
+            await refreshModels() // Use refreshModels to fetch and populate on initial load
+                .then(() => {
+                    updateWebSocketUrl(); // Call updateWebSocketUrl only after refreshModels has completed
+                });
+        });
+
+
+        chatForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const submitButton = document.getElementById("chat_submit_btn");
+            submitButton.disabled = true; // Disable the submit button
+            submitButton.value = 'Sending...'; // Change button text to indicate processing
+            console.log("disable send");
+            //const spinner = document.createElement('span'); // Create a spinner element
+            //spinner.classList.add('spinner'); // Add spinner class for styling
+            //submitButton.parentNode.insertBefore(spinner, submitButton.nextSibling);
+            //spinner.offsetWidth; // Force repaint
+
+            const userText = userInput.value.trim();
+            if (userText) {
+                // Enhanced data object to include model details
+                const dataToSend = JSON.stringify({
+                    user_input: userInput.value, 
+                    chat_id: chatIdInput.value,
+                    model_id: modelSelector.value, // Include the selected model ID
+                    listen_host: modelHost.value, // Include the model's host value
+                    listen_port: modelPort.value // Include the model's port value
+                });
+
+                // Check if the WebSocket is in a CLOSING or CLOSED state
+                if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
+                    console.log("WebSocket is closed or closing. Attempting to reconnect...");
+
+                    // Attempt to reopen the WebSocket connection
+                    updateWebSocketUrl()
+
+                    // Wait for the connection to open or fail
+                    try {
+                        await new Promise((resolve, reject) => {
+                            socket.onopen = () => {
+                                console.log("WebSocket reconnected successfully.");
+                                resolve();
+                            };
+                            socket.onerror = (error) => {
+                                console.error("Failed to reconnect WebSocket:", error);
+                                reject(error);
+                            };
+                        });
+                    } catch (error) {
+                        // Instead of alert, append an error message to the chat using the .message-error class
+                        appendMessage("Failed to send message. Please try again later.", "ERROR", null, false, true); // Assuming appendMessage has been updated to accept an isError parameter
+                        console.log("enable send (error)");
+                        //spinner.remove(); // Remove the spinner
+                        submitButton.disabled = false; // Re-enable the submit button
+                        submitButton.value = 'Send'; // Reset button text
+                        return; // Exit the function if reconnecting failed
+                    }
+                }
+
+                // Proceed to send the message if the socket is open
+                socket.send(dataToSend);
+                appendMessage(userText, "user");
+                userInput.value = "";
+
+                if (!!chatIdInput.value && !window.location.pathname.includes(chatIdInput.value)) {
+                    const newPath = `/chat/${chatIdInput.value}`;
+                    window.history.replaceState({}, "", newPath);
+                }
+
+                lastAssistantMessageElement = null;
+            }
+        });
+
+        let lastAssistantMessageElement;
+
+        function extractCode(message) {
+            const codeRegex = /```(.*?)\n([\s\S]*?)(?:```|$)/g;
+            let match;
+            let codeBlocks = [];
+        
+            while ((match = codeRegex.exec(message)) !== null) {
+                let language = match[1];
+                if (language === '') {
+                    language = 'Code';
+                }
+                codeBlocks.push({
+                    start: match.index,
+                    end: match.index + match[0].length,
+                    language: language,
+                    code: match[2],
+                    codeContent: match[2]
+                });
+            }
+        
+            return codeBlocks;
+        }
+
+        function createCodeHeader(language, code) {
+            const codeHeader = document.createElement("div");
+            codeHeader.classList.add("code-header");
+        
+            const headerText = document.createElement("span");
+            headerText.innerText = language;
+           codeHeader.appendChild(headerText);
+        
+            const copyCodeLink = document.createElement("span");
+            copyCodeLink.classList.add("copy-code");
+            copyCodeLink.innerText = "Copy code";
+            copyCodeLink.dataset.code = code;
+        
+            codeHeader.appendChild(copyCodeLink);
+            return codeHeader;
+        }
+
+        function appendMessage(message, sender, messageElement = null, isPartial = false, isError = false) {
+
+            let accumulatedChunks = '';
+        
+            if (!messageElement) {
+                messageElement = document.createElement("div");
+                const roleLabel = document.createElement("div");
+                roleLabel.classList.add("role-label");
+                roleLabel.innerText = `${sender}`;
+                messageElement.appendChild(roleLabel);
+            } else {
+                messageElement.removeChild(messageElement.lastChild);
+                accumulatedChunks = messageElement.dataset.accumulatedChunks || '';
+            }
+        
+            if (isPartial) {
+                accumulatedChunks += message;
+                messageElement.dataset.accumulatedChunks = accumulatedChunks;
+                message = accumulatedChunks;
+            } else {
+                messageElement.dataset.accumulatedChunks = '';
+            }
+        
+            const codeBlocks = extractCode(message);
+            const messageContent = document.createElement("div");
+            messageElement.classList.add("message-container");
+            messageContent.classList.add("message");
+        
+            if (isPartial) {
+                messageContent.style.opacity = 0.75;
+            }
+        
+            let lastIndex = 0;
+            codeBlocks.forEach((codeBlock) => {
+                // Add text before the code block
+                if (codeBlock.start > lastIndex) {
+                    const text = message.substring(lastIndex, codeBlock.start);
+                    const paragraphs = text.split('\n');
+                    paragraphs.forEach(paragraph => {
+                        const pElement = document.createElement('p');
+                        if (sender === 'user') {
+                            pElement.innerText = replaceInlineCode(paragraph);
+                        } else {
+                            pElement.innerHTML = replaceInlineCode(paragraph);
+                        }
+                        messageContent.appendChild(pElement);
+                    });
+                }
+
+                // Add the code header
+                const codeHeader = createCodeHeader(codeBlock.language, codeBlock.code);
+                messageContent.appendChild(codeHeader);
+        
+                // Add the code block
+                const codeWrapper = document.createElement("pre");
+                codeWrapper.classList.add("code-wrapper"); // Add this line
+                const codeElement = document.createElement("code");
+                codeElement.textContent = codeBlock.code; // Use textContent to escape HTML
+                codeWrapper.appendChild(codeElement);
+                messageContent.appendChild(codeWrapper);
+        
+                hljs.highlightElement(codeElement);
+        
+                lastIndex = codeBlock.end;
+            });
+        
+            // Add any remaining text after the last code block
+            if (lastIndex < message.length) {
+                const text = message.substring(lastIndex);
+                const paragraphs = text.split('\n');
+                paragraphs.forEach(paragraph => {
+                    const pElement = document.createElement('p');
+                    if (sender === 'user') {
+                        pElement.innerText = replaceInlineCode(paragraph);
+                    } else {
+                        pElement.innerHTML = replaceInlineCode(paragraph);
+                    }
+                    messageContent.appendChild(pElement);
+                });
+            }
+        
+            messageElement.appendChild(messageContent);
+        
+            chatHistory.appendChild(messageElement);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return messageElement;
+        }
+
+        
+        function copyToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textArea);
+        }
+        
+        function replaceInlineCode(text) {
+            return text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
+        }
+
+        userInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey) {
+                event.preventDefault();
+                const submitButton = document.getElementById("chat_submit_btn");
+                submitButton.disabled = true; // Disable the submit button immediately
+                console.log("disable send");
+                submitButton.value = 'Sending...'; // Change button text to indicate processing
+                chatForm.requestSubmit();
+            }
+        });
+        
+
+    </script>
+</body>
+</html>
