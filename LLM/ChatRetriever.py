@@ -179,6 +179,7 @@ class ChatRetriever():
         # Directly await the asynchronous generate_response call
         response = await self.chat_processor.generate_response(retrieve_prompt.format(prompt=prompt, relevant_sources=formatted_sources))
         response = response['last_response']  # Assuming generate_response returns a dict with 'last_response'
+        self.logger.debug(f"Query response for embedder from LLM: {response}")
         return response
 
 
@@ -196,6 +197,7 @@ class ChatRetriever():
         """
         rs = RetrievalService()
         # Leverage the updated retrieve_relevant_chunks method with additional parameters
+        self.logger.debug(f"Retrieving chunks for {collections}, {query}, {dataset_urns}")
         chunks = rs.retrieve_relevant_chunks(collections=collections, query=query, catalog_urns=dataset_urns, max_results=10)
         return chunks
 
