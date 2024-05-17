@@ -190,6 +190,10 @@
                 <input type="hidden" id="currently_selected_model" name="currently_selected_model" value="{{ selected_model }}">
                 <button id="refresh_models" type="button">Refresh Models</button>
             </div>
+            <div style="margin-bottom: 20px;">
+                <input type="checkbox" id="enable_retrieval" name="enable_retrieval" checked>
+                <label for="enable_retrieval">Enable Retrieval</label>
+            </div>
             <label for="user_input">Your message:</label><br>
             <textarea name="user_input" id="user_input" rows="4" cols="50" class="light-grey-textarea"></textarea><br>
             <input id="chat_submit_btn" type="submit" value="Send">
@@ -232,6 +236,7 @@
 
         const userInput = document.getElementById("user_input");
         const chatIdInput = document.querySelector("input[name='chatId']");
+        const enableRetrieval = document.getElementById("enable_retrieval");
 
         function updateWebSocketUrl() {
             console.log("attempting to update wsurl")
@@ -245,7 +250,9 @@
                     socket.close();
                 }
 
-                wsUrl = `${wsBaseUrl}/ws/${userId}/${chatId}/${selectedModelData.host_name}/${selectedModelData.listen_port}/${selectedModelData.model_name}/`;
+                const enableRetrievalChecked = document.getElementById("enable_retrieval").checked;
+
+                wsUrl = `${wsBaseUrl}/ws/${userId}/${chatId}/${selectedModelData.host_name}/${selectedModelData.listen_port}/${selectedModelData.model_name}/${enableRetrievalChecked}/`;
                 socket = new WebSocket(wsUrl); // Reinitialize the WebSocket connection with the new URL
                 console.log("WebSocket URL updated:", wsUrl);
             } else {
@@ -616,7 +623,8 @@
                     chat_id: chatIdInput.value,
                     model_id: modelSelector.value, // Include the selected model ID
                     listen_host: modelHost.value, // Include the model's host value
-                    listen_port: modelPort.value // Include the model's port value
+                    listen_port: modelPort.value, // Include the model's port value
+                    enable_retrieval: enableRetrieval.checked // Include the retrieval status
                 });
 
                 // Check if the WebSocket is in a CLOSING or CLOSED state

@@ -71,7 +71,8 @@ class ChatProcessor:
         self.host_name = host_name
         self.listen_port = listen_port
         self.model_id = model_id
-        self.retrieval = True
+        # TODO: fix back to True
+        self.retrieval = False
         self.kamiwaza_params = True
         self.reduced_messages = []
         self.last_response = None
@@ -94,6 +95,8 @@ class ChatProcessor:
 
         if 'retrieval' in kwargs:
             self.retrieval = kwargs['retrieval']
+            #TODO Fix back
+            self.retrieval = False
 
         if not ChatRetriever:
             if self.retrieval:
@@ -164,6 +167,7 @@ class ChatProcessor:
     def strtokens(self, text):
         encoding = tiktoken.encoding_for_model(self.encoding_model)
         return 4 + len(encoding.encode(text))
+
     def tokens(self, messages: List[Dict[str, str]]) -> int:
         """
         Calculates the total number of tokens for a list of messages.
@@ -192,10 +196,13 @@ class ChatProcessor:
     # TODO: figure that out
     def call_chat_completion_with_retry(self, chat_params, retries=1):
         """
-        Calls the OpenAI ChatCompletion.create API with basic retry logic.
+        Calls the OpenAI ChatCompletion.create API with basic retry logic and logs the time taken for the call.
         """
         try:
+            start_time = time.time()  # Start time check
             response = openai.ChatCompletion.create(**chat_params)
+            end_time = time.time()  # End time check
+            self.logger.debug(f"ChatCompletion.create call successful in {end_time - start_time:.2f} seconds")
             return response, None  # Return response and no error
         except Exception as e:
             self.logger.error(f"Initial call to ChatCompletion.create failed: {str(e)}")
@@ -203,7 +210,10 @@ class ChatProcessor:
                 self.logger.info("Attempting retry...")
                 try:
                     time.sleep(1)  # Simple backoff; consider exponential backoff for production use
+                    start_time = time.time()  # Start time check for retry
                     response = openai.ChatCompletion.create(**chat_params)
+                    end_time = time.time()  # End time check for retry
+                    self.logger.debug(f"Retry of ChatCompletion.create call successful in {end_time - start_time:.2f} seconds")
                     return response, None  # Retry successful
                 except Exception as retry_error:
                     self.logger.error(f"Retry call to ChatCompletion.create failed: {str(retry_error)}")
@@ -334,7 +344,7 @@ class ChatProcessor:
         
     async def generate_response(self, prompt: str, stream_callback=None, chat_params=None) -> Dict[str, str]:
         """
-        Generate a response from the chat model.
+        Generate a response from the chat model, logging input and output token counts as well as the total time taken.
         """
         self.last_response = None
         self.last_response_reason = None
@@ -342,6 +352,7 @@ class ChatProcessor:
         context_chunks = []
         self.logger.debug(f"generate_response called with retrieval {self.retrieval}, trace {self.trace_id} using {self.host_name} and {self.listen_port}")
         if self.retrieval:
+            self.logger.debug(f"GOGO retrieve")
             retriever_processor = ChatProcessor(self.model,
                 temperature = 0.1,
                 trace_id = self.trace_id,
@@ -353,7 +364,7 @@ class ChatProcessor:
             self.logger.debug(f"Retrieved context chunks: {context_chunks}")
 
         self.logger.debug("log test")
-        token_count = self.tokens(self.get_messages())
+        initial_token_count = self.tokens(self.get_messages())
 
         # Log the full system prompt, prompt, and response
         if AgentEvents:
@@ -367,7 +378,7 @@ class ChatProcessor:
 
         # if we are going to exceed the context length with all the chunks, strip them from the end until it fits
         if context_chunks:
-            while token_count + sum(self.tokens([{"user": chunk['data']}]) for chunk in context_chunks) > self.MAX_TOKENS and context_chunks:
+            while initial_token_count + sum(self.tokens([{"user": chunk['data']}]) for chunk in context_chunks) > self.MAX_TOKENS and context_chunks:
                 self.logger.debug(f"context chunk {context_chunks[-1]} cannot fit in context, removing")
                 context_chunks.pop()
 
@@ -391,6 +402,7 @@ class ChatProcessor:
 
         # Merging the model parameters with the chat parameters
         chat_params.update({**llm_params, 'model': self.model})
+        self.logger.debug(f"gogo still with {chat_params}")
 
         # Capture a start time for the request so we can debug timing
         start_time = time.time()
@@ -432,11 +444,12 @@ class ChatProcessor:
 
         # Calculate and output the duration of the call
         duration = end_time - start_time
-
         self.logger.debug(f"Duration of the call: {duration} seconds")
 
-        logmsg = f"after generation, token count is: {self.tokens(self.messages)}"
-        self.logger.debug(logmsg)
+        final_token_count = self.tokens(self.messages)
+        input_tokens = initial_token_count
+        output_tokens = final_token_count - initial_token_count
+        self.logger.debug(f"Input tokens: {input_tokens}, Output tokens: {output_tokens}, Total tokens after generation: {final_token_count}")
 
         if agent_events:
             agent_events.emit_event("agent-logs", {"trace_id": self.trace_id, "messages": self.messages, "response": self.last_response})
