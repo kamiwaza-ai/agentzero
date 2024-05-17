@@ -232,7 +232,8 @@ class ChatProcessor:
             }
 
             # Merging the model parameters with the chat parameters
-            chat_params.update({**llm_params, 'model': self.model})
+            #chat_params.update({**llm_params, 'model': self.model})
+            chat_params.update({**llm_params, 'model': 'model'})
 
             # Creating the chat completion with the merged parameters
             response = openai.ChatCompletion.create(**chat_params)
@@ -390,7 +391,7 @@ class ChatProcessor:
         chat_params['messages'] = self.get_messages() + [{"role": "user", "content": prompt_to_send}]
 
         # Merging the model parameters with the chat parameters
-        chat_params.update({**llm_params, 'model': self.model})
+        chat_params.update({**llm_params, 'model': 'model'})
 
         # Capture a start time for the request so we can debug timing
         start_time = time.time()
