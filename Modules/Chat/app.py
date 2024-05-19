@@ -112,9 +112,11 @@ async def chat(request: Request, chat_id: Optional[str] = None, user_id: Optiona
 
 @chat_router.post('/init_chat', response_class=JSONResponse)
 async def init_chat(request: Request, user_id: Optional[str] = Cookie(None)):
+    if not user_id:
+        user_id = str(uuid.uuid4())
     chat_id = str(uuid.uuid4())
-    # Initialize chat session, possibly saving it to the database or a file
-    return JSONResponse(content={"chat_id": chat_id})
+    return JSONResponse(content={"user_id": user_id, "chat_id": chat_id})
+
 
 @chat_router.get('/models', response_class=dict)
 async def list_models():
