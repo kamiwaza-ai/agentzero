@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, WebSocket, APIRouter, Cookie
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
@@ -20,6 +21,7 @@ templates = Jinja2Templates(directory=os.path.join(CHAT_DIR, "templates"))
 class ChatSession(BaseModel):
     chat_id: Optional[str]
     user_id: Optional[str]
+
 
 # Consolidating route decorators for cleaner code
 @chat_router.get('/chat/{chat_id}', response_class=HTMLResponse)
@@ -108,6 +110,12 @@ async def chat(request: Request, chat_id: Optional[str] = None, user_id: Optiona
 
     return response
 
+@chat_router.post('/init_chat', response_class=JSONResponse)
+async def init_chat(request: Request, user_id: Optional[str] = Cookie(None)):
+    chat_id = str(uuid.uuid4())
+    # Initialize chat session, possibly saving it to the database or a file
+    return JSONResponse(content={"chat_id": chat_id})
+
 @chat_router.get('/models', response_class=dict)
 async def list_models():
     """
@@ -185,63 +193,41 @@ async def process_input(user_id: str, chat_id: str, user_input: str, host_name: 
 async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, host_name: str, listen_port: str, model_name: str, enable_retrieval: bool):
     await websocket.accept()
 
-    async def stream_callback(response_chunk):
-        # Prepare a response chunk to be sent back to the client
-        response_with_type = {"type": "response_chunk", "chat_id": chat_id, "response_chunk": response_chunk}
-        await websocket.send_text(json.dumps(response_with_type))
-
     while True:
-        # Parse the JSON string to extract user_input
         try:
             data = await websocket.receive_text()
-            data_json = json.loads(data)  # Convert the received text to a JSON object
-            user_input = data_json.get('user_input')  # Extract the user_input part
+            data_json = json.loads(data)
+            user_input = data_json.get('user_input')
+
+            if user_input:
+                # Directly call process_input without passing a processor instance
+                response = await process_input(
+                    user_id=user_id, 
+                    chat_id=chat_id, 
+                    user_input=user_input, 
+                    host_name=host_name, 
+                    listen_port=listen_port, 
+                    model_name=model_name, 
+                    enable_retrieval=enable_retrieval
+                )
+                response_with_type = {"type": "response", **response}
+                await websocket.send_text(json.dumps(response_with_type))
+            else:
+                logging.error("Received data does not contain 'user_input'")
         except json.JSONDecodeError as e:
             logging.error(f"Error decoding JSON from WebSocket: {e}")
-            continue  # Skip to the next iteration on error
+            continue
         except WebSocketDisconnect as e:
             logging.info(f"WebSocket disconnected: {e}. Client likely closed the connection.")
             break
         except Exception as e:
-            if str(e) == 'code':
-                logging.info(f"WebSocket disconnected: starlette error code (code). Client likely closed the connection.")
-                break
-            else:
-                logging.error(f"Unmatched exception in websocket: {e}")
-                raise e
+            logging.error(f"Unmatched exception in websocket: {e}")
+            raise e
 
-        if 'chat_id' in data_json:
-            # This should never happen, and we will do this check for the future where we 
-            # add more auth over a given chat
-            if chat_id and chat_id != data_json.get('chat_id'):
-                logging.error(f"chat_id mismatch: {chat_id} != {data_json.get('chat_id')}")
-                response_with_type = {"type": "error", "message": "There was a problem with your chat. Please start a new chat."}
-                await websocket.send_text(json.dumps(response_with_type))
-                continue
-
-            chat_id = data_json.get('chat_id')
-        if user_input:
-            # Now, pass the extracted user_input and the parameters to process_input
-            response = await process_input(
-                user_id=user_id, 
-                chat_id=chat_id, 
-                user_input=user_input, 
-                stream_callback=stream_callback, 
-                host_name=host_name, 
-                listen_port=listen_port, 
-                model_name=model_name, 
-                enable_retrieval=enable_retrieval
-            )
-            response_with_type = {"type": "response", **response}
-            await websocket.send_text(json.dumps(response_with_type))
-        else:
-            logging.error("Received data does not contain 'user_input'")
-
-@chat_router.get('/chats', response_class=HTMLResponse)
+@chat_router.get('/chats', response_class=JSONResponse)
 async def chats(request: Request, user_id: Optional[str] = Cookie(None)):
     user_data_path = os.path.join(CHAT_DIR, f"userdata/{user_id}")
     chat_sessions = []
-
 
     if user_id and os.path.exists(user_data_path):
         titles_cache_path = os.path.join(user_data_path, 'titles.cache')
@@ -266,13 +252,14 @@ async def chats(request: Request, user_id: Optional[str] = Cookie(None)):
                         logging.error(f"Exception occurred loading title: {e}")
                     titles_cache[guid] = title
 
-                chat_sessions.append((guid, titles_cache[guid]))
+                chat_sessions.append({"chatId": guid, "title": titles_cache[guid]})
 
         with open(titles_cache_path, 'w') as f:
             valid_cache = {k: v for k, v in titles_cache.items() if os.path.exists(os.path.join(user_data_path, f"{k}.json"))}
             json.dump(valid_cache, f)
 
-    return templates.TemplateResponse('chats.html', {"request": request, "chat_sessions": chat_sessions})
+    return JSONResponse(content=chat_sessions)
+
 
 @chat_router.post('/chat/{chat_id}/title', response_class=JSONResponse)
 async def update_chat_title(request: Request, chat_id: str, user_id: Optional[str] = Cookie(None)):
