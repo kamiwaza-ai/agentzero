@@ -195,9 +195,11 @@ async def process_input(user_id: str, chat_id: str, user_input: str, host_name: 
 async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, host_name: str, listen_port: str, model_name: str, enable_retrieval: bool):
     await websocket.accept()
 
+    logging.debug("GOOOOOO ####")
     while True:
         try:
             data = await websocket.receive_text()
+            logging.debug(f"Received data from WebSocket: {data}")
             data_json = json.loads(data)
             user_input = data_json.get('user_input')
 
