@@ -183,7 +183,6 @@ async def process_input(user_id: str, chat_id: str, user_input: str, host_name: 
         logging.error(f"Exception occurred restoring state: {e}")
     logging.debug("### process_input: generate response")
     response = await processor.generate_response(user_input, stream_callback=stream_callback)
-    logging.debug(f"dumping state to {chat_state_file}")
     processor.dump_state(file_path=chat_state_file)
     
     # Add chat_id to the response if it exists
@@ -227,6 +226,20 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, h
         except Exception as e:
             logging.error(f"Unmatched exception in websocket: {e}")
             raise e
+
+@chat_router.get('/chats/{chat_id}', response_class=JSONResponse)
+async def get_chat_history(chat_id: str, user_id: Optional[str] = Cookie(None)):
+    user_data_path = os.path.join(CHAT_DIR, f"userdata/{user_id}")
+    chat_state_file = os.path.join(user_data_path, f"{chat_id}.json")
+
+    if os.path.exists(chat_state_file):
+        with open(chat_state_file, 'r') as f:
+            chat_data = json.load(f)
+            messages = chat_data.get("messages", [])
+            return JSONResponse(content={"messages": messages})
+
+    return JSONResponse(content={"messages": []})
+
 
 @chat_router.get('/chats', response_class=JSONResponse)
 async def chats(request: Request, user_id: Optional[str] = Cookie(None)):

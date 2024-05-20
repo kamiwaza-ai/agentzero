@@ -472,6 +472,8 @@ class ChatProcessor:
             "model": self.model
         }
         try:
+            # Create the directory if it doesn't exist
+            os.makedirs(os.path.dirname(target_file), exist_ok=True)
             with open(target_file, 'w', encoding='utf-8') as file:
                 json.dump(state_to_dump, file)
         except Exception as e:
