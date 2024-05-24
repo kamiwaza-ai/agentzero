@@ -94,9 +94,8 @@ class ChatProcessor:
             self.STREAM = kwargs['stream']
 
         if 'retrieval' in kwargs:
+            self.logger.debug(f"Setting retrieval to {kwargs['retrieval']}")
             self.retrieval = kwargs['retrieval']
-            #TODO Fix back
-            self.retrieval = False
 
         if not ChatRetriever:
             if self.retrieval:
@@ -384,9 +383,9 @@ class ChatProcessor:
 
         # if we have content chunks from RAG, inject them
         if context_chunks:
-            prompt_to_send = prompt_to_send + chat_prompts.rag_intro_prompt
+            prompt_to_send = '# User Inquiry\n\n' + prompt_to_send + chat_prompts.rag_intro_prompt
 
-            chunk_tpl = "Source: {source}, Offset: {offset}, Content below:\n{data}"
+            chunk_tpl = "## Source: {source}, Offset: {offset}:\n\n{data}"
             for chunk in context_chunks:
                 prompt_to_send = prompt_to_send + chunk_tpl.format(**chunk) + chat_prompts.rag_separator
         else:
@@ -472,8 +471,6 @@ class ChatProcessor:
             "model": self.model
         }
         try:
-            # Create the directory if it doesn't exist
-            os.makedirs(os.path.dirname(target_file), exist_ok=True)
             with open(target_file, 'w', encoding='utf-8') as file:
                 json.dump(state_to_dump, file)
         except Exception as e:

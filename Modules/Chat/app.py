@@ -194,30 +194,25 @@ async def process_input(user_id: str, chat_id: str, user_input: str, host_name: 
 @chat_router.websocket('/ws/{user_id}/{chat_id}/{host_name}/{listen_port}/{model_name}/{enable_retrieval}/')
 async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, host_name: str, listen_port: str, model_name: str, enable_retrieval: bool):
     await websocket.accept()
+    chunk_index = 0  # Initialize chunk index
 
-    logging.debug("GOOOOOO ####")
+    async def stream_callback(response_chunk):
+        nonlocal chunk_index
+        # Prepare a response chunk to be sent back to the client with an index
+        response_with_type = {
+            "type": "response_chunk",
+            "chat_id": chat_id,
+            "chunk_index": chunk_index,  # Add chunk index
+            "response_chunk": response_chunk
+        }
+        chunk_index += 1  # Increment chunk index
+        await websocket.send_text(json.dumps(response_with_type))
+
     while True:
         try:
             data = await websocket.receive_text()
-            logging.debug(f"Received data from WebSocket: {data}")
             data_json = json.loads(data)
             user_input = data_json.get('user_input')
-
-            if user_input:
-                # Directly call process_input without passing a processor instance
-                response = await process_input(
-                    user_id=user_id, 
-                    chat_id=chat_id, 
-                    user_input=user_input, 
-                    host_name=host_name, 
-                    listen_port=listen_port, 
-                    model_name=model_name, 
-                    enable_retrieval=enable_retrieval
-                )
-                response_with_type = {"type": "response", **response}
-                await websocket.send_text(json.dumps(response_with_type))
-            else:
-                logging.error("Received data does not contain 'user_input'")
         except json.JSONDecodeError as e:
             logging.error(f"Error decoding JSON from WebSocket: {e}")
             continue
@@ -227,6 +222,32 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, h
         except Exception as e:
             logging.error(f"Unmatched exception in websocket: {e}")
             raise e
+
+        if 'chat_id' in data_json and chat_id and chat_id != data_json.get('chat_id'):
+            logging.error(f"chat_id mismatch: {chat_id} != {data_json.get('chat_id')}")
+            response_with_type = {"type": "error", "message": "There was a problem with your chat. Please start a new chat."}
+            await websocket.send_text(json.dumps(response_with_type))
+            continue
+
+        chat_id = data_json.get('chat_id')
+        if user_input:
+            response = await process_input(
+                user_id=user_id,
+                chat_id=chat_id,
+                user_input=user_input,
+                stream_callback=stream_callback,
+                host_name=host_name,
+                listen_port=listen_port,
+                model_name=model_name,
+                enable_retrieval=enable_retrieval
+            )
+            response_with_type = {"type": "response", **response}
+            await websocket.send_text(json.dumps(response_with_type))
+        else:
+            logging.error("Received data does not contain 'user_input'")
+
+            
+            
 
 @chat_router.get('/chats/{chat_id}', response_class=JSONResponse)
 async def get_chat_history(chat_id: str, user_id: Optional[str] = Cookie(None)):
