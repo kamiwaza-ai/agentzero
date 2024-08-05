@@ -105,10 +105,12 @@ async def process_input(user_id: str, chat_id: str, user_input: str, host_name: 
         response['chat_id'] = chat_id
     return response
 
-@chat_router.websocket('/ws/{user_id}/{chat_id}/{host_name}/{listen_port}/{model_name}/{enable_retrieval}/')
-async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, host_name: str, listen_port: str, model_name: str, enable_retrieval: bool):
+@chat_router.websocket('/ws/{user_id}/{chat_id}/')
+async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
     await websocket.accept()
     chunk_index = 0  # Initialize chunk index
+
+    parameters = {}  # Dictionary to store additional parameters
 
     async def stream_callback(response_chunk):
         nonlocal chunk_index
@@ -126,6 +128,21 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, h
         try:
             data = await websocket.receive_text()
             data_json = json.loads(data)
+
+            if not parameters:
+                # Extract additional parameters from the first message
+                parameters = {
+                    "host_name": data_json.get('host_name'),
+                    "listen_port": data_json.get('listen_port'),
+                    "model_name": data_json.get('model_name'),
+                    "enable_retrieval": data_json.get('enable_retrieval')
+                }
+                # Check if any required parameter is missing
+                if not all(parameters.values()):
+                    logging.error("Missing parameters in initial message")
+                    await websocket.close(code=1003)  # Close with unsupported data code
+                    return
+
             user_input = data_json.get('user_input')
         except json.JSONDecodeError as e:
             logging.error(f"Error decoding JSON from WebSocket: {e}")
@@ -143,24 +160,37 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, h
             await websocket.send_text(json.dumps(response_with_type))
             continue
 
-        chat_id = data_json.get('chat_id')
         if user_input:
             response = await process_input(
                 user_id=user_id,
                 chat_id=chat_id,
                 user_input=user_input,
                 stream_callback=stream_callback,
-                host_name=host_name,
-                listen_port=listen_port,
-                model_name=model_name,
-                enable_retrieval=enable_retrieval
+                host_name=parameters['host_name'],
+                listen_port=parameters['listen_port'],
+                model_name=parameters['model_name'],
+                enable_retrieval=parameters['enable_retrieval']
             )
             response_with_type = {"type": "response", **response}
             await websocket.send_text(json.dumps(response_with_type))
         else:
             logging.error("Received data does not contain 'user_input'")
 
-            
+# Function to process user input
+async def process_input(user_id, chat_id, user_input, stream_callback, host_name, listen_port, model_name, enable_retrieval):
+    # Implement the actual processing logic here
+    response = {
+        "user_id": user_id,
+        "chat_id": chat_id,
+        "user_input": user_input,
+        "response_message": "Processed input",
+        "host_name": host_name,
+        "listen_port": listen_port,
+        "model_name": model_name,
+        "enable_retrieval": enable_retrieval
+    }
+    await stream_callback("This is a streamed response chunk.")
+    return response
             
 
 @chat_router.get('/chats/{chat_id}', response_class=JSONResponse)
