@@ -2,7 +2,6 @@
 from fastapi import FastAPI, Request, WebSocket, APIRouter, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
-from fastapi.templating import Jinja2Templates
 from typing import Optional
 import json
 import logging
@@ -17,99 +16,11 @@ chat_router = APIRouter()
 logging.basicConfig(level=logging.DEBUG)
 
 CHAT_DIR = os.path.dirname(__file__)
-templates = Jinja2Templates(directory=os.path.join(CHAT_DIR, "templates"))
 
 class ChatSession(BaseModel):
     chat_id: Optional[str]
     user_id: Optional[str]
 
-
-# Consolidating route decorators for cleaner code
-@chat_router.get('/chat/{chat_id}', response_class=HTMLResponse)
-@chat_router.post('/chat/{chat_id}', response_class=HTMLResponse)
-@chat_router.get('/chat', response_class=HTMLResponse, include_in_schema=False)
-@chat_router.post('/chat', response_class=HTMLResponse, include_in_schema=False)
-@chat_router.get('/', response_class=HTMLResponse, include_in_schema=False)
-async def chat(request: Request, chat_id: Optional[str] = None, user_id: Optional[str] = Cookie(None)):
-    """
-    Handles chat requests, initializes chat sessions, and processes user input.
-    
-    Args:
-        request (Request): The request object.
-        chat_id (Optional[str], optional): The chat session ID. Defaults to None.
-        user_id (Optional[str], optional): The user ID from cookies. Defaults to Cookie(None).
-    
-    Returns:
-        Response: The HTML response for GET requests or JSON response for POST requests.
-    """
-    logging.debug(f"Requested URI: {request.url}")
-    logging.debug(f"chat_id: {chat_id}")
-    if not user_id:
-        user_id = str(uuid.uuid4())
-
-    user_data_dir = os.path.join(CHAT_DIR, f"userdata/{user_id}")
-    os.makedirs(user_data_dir, exist_ok=True)
-
-    last_model = None
-    # Retrieve model selection details from the request
-    if request.method == "POST":
-        form_data = await request.form()
-        host_name = form_data.get("host_name")
-        listen_port = form_data.get("listen_port")
-        model_name = form_data.get("model_selector")
-        enable_retrieval = form_data.get("enable_retrieval") != 'False'  # Checkbox unchecked sends 'False'
-    else:
-        # Default values if not a POST request or values are missing
-        host_name = "localhost"
-        listen_port = "7777"
-        model_name = None
-        enable_retrieval = True  # Default to True if not a POST request or checkbox not present
-
-    # Initialize ChatProcessor with model selection details and retrieval option
-    processor = ChatProcessor(model=model_name, host_name=host_name, listen_port=listen_port, retrieval=enable_retrieval)
-
-    if chat_id is None:
-        logging.debug("No state, NEW SESSION")
-        chat_id = str(uuid.uuid4())
-        logging.debug(f"processor just created has messages: {processor.messages}")
-        chat_history = []
-        logging.debug(f"chat_history is: {chat_history}")
-    else:
-        chat_state_file = os.path.join(user_data_dir, f"{chat_id}.json")
-        try:
-            logging.debug(f"loading state from {chat_state_file}")
-            processor.restore_state(file_path=chat_state_file)
-
-            # if we had a saved model, and the user did not submit a model, then set that
-            if processor.last_model and not model_name:
-                last_model = processor.last_model
-                processor.model = processor.last_model
-            chat_history = processor.messages
-        except FileNotFoundError as e:
-            logging.error(f"Exception occurred restoring state: {e}")
-            chat_history = []
-
-    if request.method == "POST":
-        user_input = form_data.get("userInput")
-        chat_id = form_data.get("chatId")
-        response = process_input(user_id, chat_id, user_input, host_name, listen_port, processor.model, enable_retrieval=enable_retrieval)
-
-        return JSONResponse(content={"last_response": response['last_response']})
-
-    context = {
-        "request": request, 
-        "user_id": user_id, 
-        "chat_id": chat_id, 
-        "chat_history": chat_history,
-        "enable_retrieval": enable_retrieval  # Include retrieval status in context
-    }
-    if last_model is not None:
-        context["selected_model"] = last_model
-    
-    response = templates.TemplateResponse("chat.html", context)
-    response.set_cookie(key="user_id", value=user_id)
-
-    return response
 
 @chat_router.post('/init_chat', response_class=JSONResponse)
 async def init_chat(request: Request, user_id: Optional[str] = Cookie(None)):
@@ -131,25 +42,28 @@ async def list_models():
     Returns:
         dict: A dictionary containing a list of available models and their details.
     """
-    import httpx
     from fastapi.responses import JSONResponse
+    import httpx
 
     try:
-        from kamiwaza.serving.services import ServingService
-        ss = ServingService()
-        model_deployments = ss.list_deployments(with_names=True)
-        model_details = [
-            {
-                "model_id": str(getattr(md, "model_id", "default")),
-                "host_name": str(getattr(md, "host_name", "localhost")),
-                "model_name": str(getattr(md, "model_name", "default")),
-                "listen_port": str(getattr(md, "listen_port", "8000")),
-                "status": str(getattr(md, "status", "DEPLOYED")),
-                "deployed_at": str(getattr(md, "deployed_at", "untracked"))
-            } for md in model_deployments
-        ]
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                'http://localhost:7777/serving/deployments',
+            )
+            response.raise_for_status()
+            model_deployments = response.json()
+            model_details = [
+                {
+                    "m_id": md.get("m_id", "default"),
+                    "host_name": md.get("host_name", "localhost"),
+                    "m_name": md.get("m_name", "default"),
+                    "listen_port": md.get("listen_port", "8000"),
+                    "status": md.get("status", "DEPLOYED"),
+                    "deployed_at": md.get("deployed_at", "untracked")
+                } for md in model_deployments
+            ]
 
-        return JSONResponse(content={"models": model_details})
+            return JSONResponse(content={"models": model_details})
     except httpx.HTTPError as e:
         logging.error(f"Failed to fetch models: {e}")
         return JSONResponse(content={"error": "Failed to fetch models"}, status_code=500)

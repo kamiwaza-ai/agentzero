@@ -70,7 +70,7 @@ class ChatProcessor:
         self.logger = logging.getLogger(__name__)
         self.host_name = host_name
         self.listen_port = listen_port
-        self.model_id = model_id
+        self.m_id = model_id
         # TODO: fix back to True
         self.retrieval = False
         self.kamiwaza_params = True
@@ -363,6 +363,7 @@ class ChatProcessor:
             self.logger.debug(f"Retrieved context chunks: {context_chunks}")
 
         self.logger.debug("log test")
+        
         initial_token_count = self.tokens(self.get_messages())
 
         # Log the full system prompt, prompt, and response
@@ -373,7 +374,6 @@ class ChatProcessor:
 
         llm_params = LLMParams.get(self.model)
 
-        prompt_to_send = prompt
 
         # if we are going to exceed the context length with all the chunks, strip them from the end until it fits
         if context_chunks:

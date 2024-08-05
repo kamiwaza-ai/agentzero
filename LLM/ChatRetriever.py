@@ -198,7 +198,7 @@ class ChatRetriever():
         rs = RetrievalService()
         # Leverage the updated retrieve_relevant_chunks method with additional parameters
         self.logger.debug(f"Retrieving chunks for {collections}, {query}, {dataset_urns}")
-        chunks = rs.retrieve_relevant_chunks(collections=collections, query=query, catalog_urns=dataset_urns, max_results=3)
+        chunks = rs.retrieve_relevant_chunks(collections=collections, query=query, catalog_urns=dataset_urns, max_results=5)
         return chunks
 
     async def get_relevant_chunks(self, prompt: str) -> List[Dict[str, Any]]:
