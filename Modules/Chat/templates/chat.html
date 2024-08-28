@@ -269,7 +269,7 @@
                 }
                 // Handling different message types
                 if (data.chat_id == chatIdInput.value && data.type === "response_chunk") {
-                    lastAssistantMessageElement = appendMessage(data.response_chunk.choices[0].delta.content, assistantName, lastAssistantMessageElement, true);
+                    lastAssistantMessageElement = appendMessage(data.response_chunk, assistantName, lastAssistantMessageElement, true);
                 } else if (data.chat_id == chatIdInput.value && data.type === "response") {
                     submitButton = document.getElementById("chat_submit_btn");
                     //spinner = document.querySelector('.spinner');

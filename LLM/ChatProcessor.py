@@ -36,8 +36,6 @@ try:
 except ImportError:
     ChatRetriever = None
 
-# Set your API key as an environment variable
-openai.api_key = os.getenv("OPENAI_API_KEY", "default_key")
 
 
 class ChatProcessor:
@@ -77,10 +75,29 @@ class ChatProcessor:
         self.last_response = None
         self.last_response_reason = None
         self.last_model = None
+        self.client = None
+        self.verify_ssl_certs = False
+
+        self.logger.debug(f"ChatProcessor initialized with model {self.model}, temperature {self.temperature}, trace_id {self.trace_id}, host_name {self.host_name}, listen_port {self.listen_port}, model_id {self.model_id}, retrieval {self.retrieval}, kamiwaza_params {self.kamiwaza_params}")
 
         # Handle the None case
         if not self.model:
             self.model = self.MODEL
+
+
+
+        self.client = openai.OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY", "default_key"), 
+            base_url=f"http://{self.host_name}:{self.listen_port}/v1"
+        )
+
+        # Set API base URL based on model specifics
+        if not self.model.startswith('gpt-3') and not self.model.startswith('gpt-4'):
+            # SSL verification flag
+            if not self.host_name:
+                self.host_name = "localhost"
+            if not self.verify_ssl_certs:
+                self.client.verify_ssl_certs = False
 
         ## Optional kwargs
         if 'kamiwaza_params' in kwargs:
@@ -114,13 +131,7 @@ class ChatProcessor:
             self.logger.setLevel(logging.INFO)
 
 
-        # Set API base URL based on model specifics
-        if not self.model.startswith('gpt-3') and not self.model.startswith('gpt-4'):
-            # SSL verification flag
-            if not self.host_name:
-                self.host_name = "localhost"
-            openai.verify_ssl_certs = False
-            openai.api_base = f"http://{self.host_name}:{self.listen_port}/v1"
+
 
         # Adjust MAX_TOKENS based on model specifics
         self._adjust_max_tokens()
@@ -149,8 +160,11 @@ class ChatProcessor:
 
     def _adjust_max_tokens(self):
         """Adjusts MAX_TOKENS based on the model specifics."""
-        if self.model.startswith('gpt-4'):
-            self.MAX_TOKENS = 8192
+        if self.model.startswith('gpt-4o'):
+            if 'gpt-4o' not in self.model:
+                self.MAX_TOKENS = 8192
+            else:
+                self.MAX_TOKENS = 128000
         elif self.model.startswith('gpt-4-32k'):
             if not os.getenv('ALLOW_GPT4_32K', None):
                 self.logger.warn("### WARNING: gpt-4-32k is selected as the model. You PROBABLY don't want to use this; switch to gpt-4-turbo instead for longer context and much lower cost!")
@@ -195,18 +209,18 @@ class ChatProcessor:
         Calls the OpenAI ChatCompletion.create API with basic retry logic.
         """
         try:
-            response = openai.ChatCompletion.create(**chat_params)
+            response = self.client.chat.completions.create(**chat_params)
             return response, None  # Return response and no error
         except Exception as e:
-            self.logger.error(f"Initial call to ChatCompletion.create failed: {str(e)}")
+            self.logger.error(f"Initial call to chat.completions.create failed: {str(e)}")
             if retries > 0:
                 self.logger.info("Attempting retry...")
                 try:
                     time.sleep(1)  # Simple backoff; consider exponential backoff for production use
-                    response = openai.ChatCompletion.create(**chat_params)
+                    response = self.client.chat.completions.create(**chat_params)
                     return response, None  # Retry successful
                 except Exception as retry_error:
-                    self.logger.error(f"Retry call to ChatCompletion.create failed: {str(retry_error)}")
+                    self.logger.error(f"Retry call to chat.completions.create failed: {str(retry_error)}")
                     return None, retry_error  # Return no response and the error
             else:
                 return None, e  # Return no response and the initial error
@@ -236,13 +250,13 @@ class ChatProcessor:
             chat_params.update({**llm_params, 'model': 'model'})
 
             # Creating the chat completion with the merged parameters
-            response = openai.ChatCompletion.create(**chat_params)
+            response = self.client.chat.completions.create(**chat_params)
             self.logger.debug(str(response))
             if isinstance(response, types.GeneratorType):
                 # Consume the generator and extract the string content from each OpenAIObject
-                self.title = ''.join(chunk['choices'][0]['message']['content'] for chunk in response)
+                self.title = ''.join(chunk.choices[0].delta.content for chunk in response if chunk.choices[0].delta.content is not None)
             else:
-                self.title = response['choices'][0]['message']['content']
+                self.title = response.choices[0].message.content
             self.logger.debug("Title updated to %s" % self.title)
         except Exception as e:
             # verbosely dump trace for debugging
@@ -298,14 +312,14 @@ class ChatProcessor:
             #tc = self.tokens([distillation_message])
 
             try:
-                response = openai.ChatCompletion.create(
+                response = self.client.chat.completions.create(
                     temperature=self.temperature,
                     model='gpt-3.5-turbo' if 'gpt' in self.model else self.model,
                     messages=[{"content": distillation_message}],  # Send only the content for distillation
                     # Incorporate model/api params from __init__
                     **llm_params,
                 )
-                distilled_content = response['choices'][0]['message']['content']
+                distilled_content = response.choices[0].message.content
                 self.reduced_messages.append({"role": message["role"], "content": distilled_content})
                 self.logger.debug(f"Message {message['content']} distilled to {distilled_content}.")
 
@@ -400,26 +414,26 @@ class ChatProcessor:
             self.last_response = ""
             if 'stream' not in chat_params:
                 chat_params['stream'] = True
-            response = openai.ChatCompletion.create(**chat_params)
+            response = self.client.chat.completions.create(**chat_params)
             for chunk in response:
                 # ignore chunks without content, which will be roles,
                 # which for now can only be assistant in theory anyhow
-                if chunk['choices'][0]['delta'].get('content'):
-                    self.last_response = self.last_response + chunk['choices'][0]['delta']['content']
+                if chunk.choices[0].delta.content:
+                    self.last_response = self.last_response + chunk.choices[0].delta.content
                     if stream_callback:
                         await stream_callback(chunk)
-                    if chunk['choices'][0].get('finish_reason'):
-                        self.last_response_reason = chunk['choices'][0]['finish_reason']
+                    if chunk.choices[0].finish_reason:
+                        self.last_response_reason = chunk.choices[0].finish_reason
 
             self.messages.append({"role": "user", "content": prompt})
             self.messages.append(
                 {"role": "assistant", "content": self.last_response})
         else:
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 **chat_params
             )
-            self.last_response = response['choices'][0]['message']['content']
-            self.last_response_reason = response['choices'][0]['finish_reason']
+            self.last_response = response.choices[0].message.content
+            self.last_response_reason = response.choices[0].finish_reason
             self.messages.append({"role": "user", "content": prompt})
             self.messages.append(
                 {"role": "assistant", "content": self.last_response})

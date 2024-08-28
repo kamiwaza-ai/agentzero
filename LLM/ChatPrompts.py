@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class ChatPrompts(BaseModel):
     """
@@ -18,7 +18,7 @@ class ChatPrompts(BaseModel):
 
     """
 
-    relevance_prompt = """
+    relevance_prompt: str = """
     INSTRUCTION: I will provide you a user prompt. Your job is to determine if any of the data sources I list now are pertinent to the user inquiry. I will list them as tuples in the format (description, catalog_urn). You will evaluate the description and urn for relevance, ESPECIALLY the description, as it is user-supplied.
 
     RESPONSE FORMAT: you must respond with a list of the catalog_urn entries (you are not responding with tuples or including the description), in python format, without backticks or code labels. e.g., your response might be: ["urn:li:dataset:(urn:li:dataPlatform:s3,recipes/2023,PROD)", "urn:li:dataset:(urn:li:dataPlatform:s3,archives/markdown/joyOfCooking.md,PROD)"]. If no sources match respond ONLY with an empty list []. 
@@ -40,7 +40,7 @@ class ChatPrompts(BaseModel):
 
     """
 
-    retrieve_prompt = """
+    retrieve_prompt: str = """
     We have to respond to a user query. We have previously determined that the following sources are possibly relevant to our inquiry:
 
     {relevant_sources}
@@ -98,9 +98,9 @@ class ChatPrompts(BaseModel):
 
     rag_separator: str = "\n----------\n"
 
-    class Config:
-    # Allowing arbitrary types for future flexibility
-        arbitrary_types_allowed = True
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
 
 # Instantiating a static member for easy access similar to settings in config.py
 chat_prompts = ChatPrompts()

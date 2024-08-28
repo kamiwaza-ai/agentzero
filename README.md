@@ -3,6 +3,12 @@
 AgentZero is a package that acts as a chat interface, with classes for interacting with OpenAI compatible APIs for inference,
 both locally and elsewhere.
 
+## Version note
+
+As of this commit, this is updated to work with Kamiwaza 0.3.1; however, we have a very large in-progress revamp of agentzero that is not yet released; but we wanted to make this work with the latest Kamiwaza, and it also works with openai 1.0+ as the engines generally support that now.
+
+(The key thing was we wanted to support Pydantic 2 in agentzero so you could use the kamiwaza venv also)
+
 ## Installing/Running
 
 Below this installing/running is a quickstart for with & without Kamiwaza community edition.

@@ -1,5 +1,5 @@
 from typing import Dict
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Define llm_params as a global variable
 # The need/utility of these varies. The params here are
@@ -116,6 +116,10 @@ class LLMParams(BaseModel):
     """
     This class represents the parameters for the model.
     """
+
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
 
     @classmethod
     def get(cls, model_name: str) -> Dict:

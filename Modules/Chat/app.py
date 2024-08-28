@@ -126,10 +126,10 @@ async def list_models():
         model_deployments = ss.list_deployments(with_names=True)
         model_details = [
             {
-                "model_id": str(getattr(md, "model_id", "default")),
-                "host_name": str(getattr(md, "host_name", "localhost")),
-                "model_name": str(getattr(md, "model_name", "default")),
-                "listen_port": str(getattr(md, "listen_port", "8000")),
+                "model_id": str(getattr(md, "m_id", "default")),
+                "host_name": str(getattr(md.instances[0], "host_name", "localhost") if md.instances else "localhost"),
+                "model_name": str(getattr(md, "m_name", "default")),
+                "listen_port": str(getattr(md, "lb_port", "8000")),
                 "status": str(getattr(md, "status", "DEPLOYED")),
                 "deployed_at": str(getattr(md, "deployed_at", "untracked"))
             } for md in model_deployments
@@ -183,7 +183,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str, h
 
     async def stream_callback(response_chunk):
         # Prepare a response chunk to be sent back to the client
-        response_with_type = {"type": "response_chunk", "chat_id": chat_id, "response_chunk": response_chunk}
+        response_with_type = {"type": "response_chunk", "chat_id": chat_id, "response_chunk": response_chunk.choices[0].delta.content}
         await websocket.send_text(json.dumps(response_with_type))
 
     while True:

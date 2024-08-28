@@ -1,25 +1,26 @@
 from typing import Any, Dict
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from AgentMemory.WeaviateImplementation import WeaviateImplementation
 from AgentMemory.Memory import Memory
 from datetime import datetime
+import uuid
 
 class AgentMemory(BaseModel):
     """
     AgentMemory serves as a class for managing agent's memory using Weaviate.
     It uses the agent's identity (UUID) when creating memories of AgentMemory type.
     """
-    agent_id: str
-    weaviate_client: WeaviateImplementation
-    thought_chain: Dict[str, Any]
+    agent_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    weaviate_client: WeaviateImplementation = Field(default_factory=WeaviateImplementation)
+    thought_chain: Dict[str, Any] = Field(default_factory=dict)
 
-    def __init__(self, agent_id: str = "", base_instruction: str = ""):
-        self.agent_id = agent_id if agent_id else str(uuid.uuid4())
-        self.weaviate_client = WeaviateImplementation()
-        self.thought_chain = {
-            'base_instruction': base_instruction,
-            'thoughts': [f"{datetime.now}: I was created"]
-        }
+    def __init__(self, **data):
+        super().__init__(**data)
+        if not self.thought_chain:
+            self.thought_chain = {
+                'base_instruction': data.get('base_instruction', ''),
+                'thoughts': [f"{datetime.now()}: I was created"]
+            }
 
     def set_id(self, agent_id: str) -> None:
         """
